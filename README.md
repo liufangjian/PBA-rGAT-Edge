@@ -27,96 +27,87 @@ Shenzhen Giga Design Automation Co., Ltd.
 
 ## 🔧 Environment Requirements
 ### Hardware
-- GPU: NVIDIA RTX 4080 / A100 / H100 (≥16GB VRAM)
-- CPU: Multi-core Xeon, ≥256GB RAM for large industrial designs
+- GPU: NVIDIA RTX 4080 (≥16GB VRAM)
+- CPU: 4× Intel Xeon Platinum 8356H
+- RAM: 1 TB DDR4 ECC
+- OS: CentOS 7.6
 ### Software
 ```bash
 python >= 3.9
 torch >= 1.13
 torch_geometric >= 2.3
 numpy
-pandas
-scipy
+pyyaml
 matplotlib
-h5py
 tqdm
 ```
 Install dependencies:
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch --index-url https://download.pytorch.org/whl/cu118
 pip install torch_geometric
-pip install numpy pandas scipy matplotlib h5py tqdm
+pip install numpy pyyaml matplotlib tqdm
 ```
 
-## 📂 Dataset Format
-We use industrial STA timing datasets exported from commercial EDA tools.
-Each design outputs an HDF5 file containing three components:
-1. `node_feat`: Pin-level electrical attributes (Table 1 in paper)
-   - slew_type, max_rise_trans, max_fall_trans, pin_direction
-2. `edge_feat`: Timing arc attributes (cell arc / net arc)
-   - GBA_delay, arc_type, total_R, rise_cap, fall_cap
-3. `edge_index`: Directed graph connectivity (source pin → dest pin)
-4. `label_slew` / `label_delay`: Ground-truth PBA arc slew & delay
+## 📂 Data Generation
 
-### Data Preprocessing Script
-`scripts/build_timing_graph.py` converts raw STA report to standardized HDF5 graph file.
+The codebase integrates a **physically compliant synthetic timing graph generator** (`src/data.py`) that follows EDA static timing physical laws: dual-pass Elmore delay calculation, GBA pessimism inflation, STA worst-path timing propagation rules. Feature dimensions and definitions fully aligned with Table 1 of the paper.
+
+### Important Data Availability Statement
+The industrial timing datasets used in the original paper experiments are proprietary design files exported from commercial EDA static timing tools, protected by internal copyright and non-disclosure agreements, which cannot be publicly distributed.
+
+The synthetic data is provided solely to verify the complete executable workflow and validate the proposed network logic. Numerical results trained on synthetic graphs will differ from the paper's reported R²/MAE values on industrial designs.
+
+## 🚀 Quick Start
+
+### Run Training + Test Evaluation
+
 ```bash
-python scripts/build_timing_graph.py --sta_report ./data/design7_gba.rpt --output ./dataset/design7.h5
+python run.py
 ```
 
-## 🚀 Training
-### Step 1: Basic Training Command
+The script first trains the model on synthetic timing graphs, then evaluates the best checkpoint on test cases, and prints a final summary table.
+
+### Custom Configuration
+
+Override config via CLI arguments or `configs/default.yaml`:
+
 ```bash
-python train.py \
-  --train_dataset_root ./dataset/train \
-  --test_dataset_root ./dataset/test \
-  --layer_num 5 \
-  --beta 0.5 \
-  --gpu 0 \
-  --save_ckpt ./ckpts/pba_rgat_edge_best.pth \
-  --log_dir ./logs/train_run
+python run.py --epochs 30 --batch-size 64 --name exp1
 ```
-Key arguments:
-- `--layer_num`: Number of ResAtt-Edge layers (optimal=5 per ablation)
-- `--beta`: Weight balance between slew loss & delay loss
-- `--early_stop`: Enable early stopping to avoid overfitting
-- `--lr_scheduler ReduceLROnPlateau`
+
+Key configurable parameters (in order of priority: CLI > `configs/default.yaml` > code default):
+
+| Parameter | Config key | Default | Description |
+|---|---|---|---|
+| `--epochs` | `training.epochs` | 30 | Number of training epochs |
+| `--batch-size` | `training.batch_size` | 64 | Training batch size |
+| `--train_cases` | `data.train_cases` | design1–design5 | Training case list (comma separated) |
+| `--project` | `paths.project` | `./runs/` | Save root directory |
+| `--name` | — | `exp` | Experiment name (subdirectory) |
+| — | `model.gat_layer_num` | 3 | Number of ResAtt-Edge layers |
+| — | `training.lr` | 0.001 | Learning rate |
+| — | `training.loss_coefficient.delay` | 0.95 | Delay loss weight |
+| — | `training.loss_coefficient.slew` | 0.05 | Slew loss weight |
 
 ### Training Algorithm
 See Algorithm 1 in the paper for full end-to-end training flow with Huber loss.
 
 ## ⚡ Inference / Timing Prediction
-Load trained checkpoint and predict PBA-quality arc delays for unseen industrial designs:
-```bash
-python infer.py \
-  --ckpt ./ckpts/pba_rgat_edge_best.pth \
-  --data ./dataset/test/design8.h5 \
-  --output_rpt ./result/design8_pred_pba.rpt
-```
-The output report reconstructs full path delays by summing predicted per-arc values, compatible with standard STA timing closure flow.
+
+Inference runs automatically after training: the best model (saved to `runs/rgat_1108/rgat_best.pt`) is evaluated on test cases and results are printed in the final summary table. Per-case metrics and predictions are also saved to `output/rgat/test/`.
 
 ## 📊 Reproduce Paper Experiments
+
+The paper's main results (Table 2, Table 3) were obtained on proprietary industrial datasets. The open-source code provides a synthetic data generator (`src/data.py`) with matching feature definitions for workflow validation. See paper Sections 5.1–5.3 for detailed experimental setup.
+
 ### Baseline Comparison
-We re-implement all baselines for fair comparison:
-- MLP, GraphSAGE, GAT, EGNN, DeepEdgeGAT
-Run unified benchmark:
-```bash
-bash scripts/run_all_baselines.sh
-```
+The paper compares against MLP, GraphSAGE, GAT, EGNN, and DeepEdgeGAT. See paper Table 2 for full comparison.
+
 ### Ablation Studies
-1. Edge feature ablation (remove edge aggregation)
-2. Residual connection ablation
-3. Layer depth sweep (1/5/10/30 layers)
-```bash
-python ablation_agg.py
-python ablation_residual.py
-python ablation_layer_depth.py
-```
-### Speedup Evaluation
-Measure inference runtime vs commercial full PBA STA:
-```bash
-python eval_speedup.py --tool_pba_log ./runtime/sta_pba.log --model_log ./runtime/model_infer.log
-```
+The paper ablates (Section 5.2):
+1. **Edge feature aggregation**: removing edge features during aggregation leads to non-convergence (Fig. 7b)
+2. **Residual connections**: removing them causes significant performance degradation
+3. **Layer depth**: 5-layer configuration achieves best trade-off (Fig. 6c)
 
 ## 📈 Main Experimental Results
 1. **Accuracy**
@@ -139,14 +130,28 @@ If you find this work useful in your research or industrial flow, please cite ou
 }
 ```
 
+## ⚠️ Errata
+
+**Equation (4) dimension in the original paper**: Eq. (4) in Section 4.3 specifies the encoder weight as $W_{\text{enc}} \in \mathbb{R}^{D_n \times (D_n + D_e)}$, not $W_{\text{enc}} \in \mathbb{R}^{D_n \times (2D_n + D_e)}$ as printed. The aggregated vector $g_i^d$ has dimension $D_n + D_e$ (concatenation of $x_j^{d-1}$ and $e_{ij}$), so the correct mapping is $D_n + D_e \to D_n$.
+
+In this codebase, the `ResidualEncoder` at [`src/model.py`](src/model.py) implements the correct dimension:
+
+```python
+nn.Linear(node_feat_dim + edge_feat_dim, node_feat_dim)
+```
+
+The full encoder follows Eq. (4) faithfully: `Linear(D_n + D_e, D_n) → LayerNorm → LeakyReLU`.
+
 ## ❓ FAQ
-1. Where can I get the industrial timing dataset?
-   Our dataset is confidential industrial STA output. You can generate your own dataset from commercial EDA GBA/PBA reports with our preprocessing script.
-2. Can this model be integrated into open-source STA tools (OpenTimer, OpenSTA)?
-   Yes, the inference script outputs standard timing report format that can be parsed by open-source STA platforms.
-3. How to tune hyperparameters for smaller designs?
-   Reduce `layer_num` to 3–4 and lower batch size for small-scale circuits.
+
+1. **Where can I get the industrial timing dataset?**
+   Our dataset is confidential industrial STA output. The open-source code provides a synthetic timing graph generator (`src/data.py`) for workflow validation.
+
+2. **How to tune hyperparameters for smaller designs?**
+   Reduce `gat_layer_num` to 3–4 and lower batch size in `configs/default.yaml`.
+
+3. **Why do experimental metrics differ from the DAC 2026 paper values?**
+   The paper's results were obtained on proprietary industrial designs. The synthetic data follows the same physical timing rules and feature definitions but uses artificially generated electrical parameters, so R²/MAE values will differ.
 
 ## 📄 License
 This project is released under the MIT License. See [LICENSE](LICENSE) file for full terms.
-```

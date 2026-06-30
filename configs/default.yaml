@@ -1,0 +1,77 @@
+# ============================================================================
+# PBA-rGAT-Edge Default Configuration
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Model architecture
+# ---------------------------------------------------------------------------
+model:
+  node_feat_dim: 4            # Node features: [slew_type, max_rise_trans, max_fall_trans, direction]
+  edge_feat_dim: 5            # Edge features: [GBA_delay, arc_type, total_R, rise_cap, fall_cap]
+  gat_layer_num: 5            # Number of stacked ResAtt-Edge layers (D=5 optimal, paper Fig.6c)
+
+# ---------------------------------------------------------------------------
+# Training hyperparameters
+# ---------------------------------------------------------------------------
+training:
+  epochs: 3
+  batch_size: 64
+  lr: 0.001
+  loss_coefficient:
+    slew: 0.05
+    delay: 0.95
+  clip_grad_norm: 1.0
+
+# ---------------------------------------------------------------------------
+# Synthetic data generator (EDA STA physical model)
+# ---------------------------------------------------------------------------
+generator:
+  min_nodes: 20
+  max_nodes: 100
+  min_layers: 3
+  max_layers: 6
+  max_fan_in: 3
+  noise_ratio: 0.001            # Label noise level (PBA + N(0, noise_ratio * PBA))
+
+# ---------------------------------------------------------------------------
+# Dataset
+# ---------------------------------------------------------------------------
+data:
+  train_cases: ["design1", "design2", "design3", "design4", "design5"]
+  test_cases:  ["design6", "design7", "design8"]
+  num_train_samples: 500        # Number of train graphs per case
+  num_val_samples: 100          # Number of val graphs per case
+  num_test_graphs: 50           # Test graphs per case
+  sampling_ratio: 1.0
+
+# ---------------------------------------------------------------------------
+# Optimizer
+# ---------------------------------------------------------------------------
+optimizer:
+  weight_decay: 1.0e-5
+
+# ---------------------------------------------------------------------------
+# LR scheduler (ReduceLROnPlateau)
+# ---------------------------------------------------------------------------
+scheduler:
+  mode: "min"
+  factor: 0.5
+  patience: 3
+  min_lr: 1.0e-6
+  threshold: 1.0e-4
+
+# ---------------------------------------------------------------------------
+# Early stopping
+# ---------------------------------------------------------------------------
+early_stopper:
+  patience: 10
+  min_delta: 0.0001
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  project: "./runs/"
+  train_output: "output/rgat/train"     # Per-epoch loss/metrics dump dir
+  test_output: "output/rgat/test"       # Per-design test results dir
+  model_dir: "runs/rgat_1108"           # Model checkpoint dir
