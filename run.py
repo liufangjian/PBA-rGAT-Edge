@@ -80,7 +80,7 @@ def main(opt):
     print("=" * 100)
     test_case_names = _cfg("data.test_cases", ["design6", "design7", "design8"])
 
-    best_model_path = os.path.join(model_save_path, "rgat_best.pt")
+    best_model_path = os.path.join(model_save_path, "pbargatedge_best.pt")
     if os.path.exists(best_model_path):
         best_model = torch.load(best_model_path, map_location=device, weights_only=False)
     else:

@@ -93,7 +93,7 @@ See Algorithm 1 in the paper for full end-to-end training flow with Huber loss.
 
 ## ⚡ Inference / Timing Prediction
 
-Inference runs automatically after training: the best model (saved to `runs/rgat_1108/rgat_best.pt`) is evaluated on test cases and results are printed in the final summary table. Per-case metrics and predictions are also saved to `output/rgat/test/`.
+Inference runs automatically after training: the best model (saved to `runs/pbargatedge_1108/pbargatedge_best.pt`) is evaluated on test cases and results are printed in the final summary table. Per-case metrics and predictions are also saved to `output/pbargatedge/test/`.
 
 ## 📊 Reproduce Paper Experiments
 

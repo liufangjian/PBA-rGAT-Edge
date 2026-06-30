@@ -62,7 +62,7 @@ def evaluate_test(model, test_node_loader_dict, test_case_names,
             path_delay_mae = calculate_mae(total_path_label_delay, total_path_pred_delay)
             delay_max_diff = max_diff(total_path_label_delay, total_path_pred_delay)
 
-            test_save_dir = os.path.join(ROOT, "output/rgat/test", case)
+            test_save_dir = os.path.join(ROOT, "output/pbargatedge/test", case)
             os.makedirs(test_save_dir, exist_ok=True)
             torch.save({
                 "delay_max_diff": delay_max_diff,

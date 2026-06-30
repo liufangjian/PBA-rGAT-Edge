@@ -72,6 +72,6 @@ early_stopper:
 # ---------------------------------------------------------------------------
 paths:
   project: "./runs/"
-  train_output: "output/rgat/train"     # Per-epoch loss/metrics dump dir
-  test_output: "output/rgat/test"       # Per-design test results dir
-  model_dir: "runs/rgat_1108"           # Model checkpoint dir
+  train_output: "output/pbargatedge/train"     # Per-epoch loss/metrics dump dir
+  test_output: "output/pbargatedge/test"       # Per-design test results dir
+  model_dir: "runs/pbargatedge_1108"           # Model checkpoint dir

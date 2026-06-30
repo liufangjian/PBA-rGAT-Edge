@@ -250,7 +250,7 @@ def run_pipeline(opt, device: str):
               f"arc_slew_r2 {accuracy_slew_val:.4f} | arc_delay_r2 {accuracy_delay_val:.4f} | "
               f"lr {current_lr:.2e}", flush=True)
 
-        dump_mae_path = os.path.join(ROOT, "output/rgat/train")
+        dump_mae_path = os.path.join(ROOT, "output/pbargatedge/train")
         os.makedirs(dump_mae_path, exist_ok=True)
         torch.save({
             "train_time": train_time,
@@ -264,13 +264,13 @@ def run_pipeline(opt, device: str):
             print(f"  !! Early stop at epoch {epoch}")
             break
 
-        model_save_path = os.path.join(ROOT, "runs/rgat_1108")
+        model_save_path = os.path.join(ROOT, "runs/pbargatedge_1108")
         if best_val_r2 < accuracy_delay_val:
             best_val_r2 = accuracy_delay_val
             best_val_slew_r2 = accuracy_slew_val
             best_epoch = epoch
             os.makedirs(model_save_path, exist_ok=True)
-            best_model_path = os.path.join(model_save_path, "rgat_best.pt")
+            best_model_path = os.path.join(model_save_path, "pbargatedge_best.pt")
             torch.save(model, best_model_path)
 
     exec_time = time.time() - start_time
