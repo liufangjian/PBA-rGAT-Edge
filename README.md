@@ -6,24 +6,21 @@ Official PyTorch implementation for DAC 2026 paper **PBA-rGAT-Edge: Arc-Level Pa
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ## 📖 Abstract
-Path-Based Analysis (PBA) delivers high-accuracy static timing results but suffers extreme runtime overhead on large industrial SoCs, while Graph-Based Analysis (GBA) runs fast yet introduces severe timing pessimism.
-We propose **PBA-rGAT-Edge**, a residual edge-aware graph attention network that directly models **cell & net timing arcs** as graph edges to predict PBA-quality slew/delay without full PBA execution:
-1. Arc-native graph formulation: explicitly encode pin node features + timing arc edge features;
-2. Residual edge-aware attention aggregation fuses both node & edge information;
-3. Multi-layer embedding fusion + dual-task head predicts arc slew and delay simultaneously;
-4. Up to **29×~48× speedup vs commercial STA PBA**, path delay prediction R²=0.999, MAE ≤4.2ps on industrial testcases.
+
+Path-Based Analysis (PBA) provides accurate timing by evaluating real signal transitions along true paths, but its computational cost makes full-chip deployment impractical on modern large-scale designs. Graph-Based Analysis (GBA), while much faster, often suffers from pessimism due to worst-case propagation. To bridge this accuracy–efficiency gap, we propose PBA-rGAT-Edge, a scalable residual graph attention model that predicts arc-level delay and slew using edge-aware message passing. Unlike prior cell-centric formulations, PBA-rGAT-Edge operates on a pin-level timing graph and explicitly embeds both cell and interconnect arcs as edge features. A lightweight residual attention backbone, coupled with multi-level feature fusion and dual-task prediction, enables efficient training and accurate timing inference. On three benchmark test cases, the model achieved a 29× to 48× inference speedup compared to commercial STA analysis, while maintaining stable acceleration performance across diverse circuit structures, significantly enhancing timing analysis efficiency.
 
 ## 📌 Authors
 Fangjian Liu, Chenyang Lv, Chunyang Feng
-Shenzhen Giga Design Automation Co., Ltd.
+Shenzhen Giga Design Automation Co., Ltd., Shenzhen, China
+{fjliu, cylv, cyfeng}@giga-da.com
 
-## 🧩 Framework Overview
-![Pipeline](https://p-flow-sign.bytedance.net/tos-cn-i-ik7evvg4ik/8ca960e7e16c4aaf9b090cab351a66e9.pdf#page=3)
-1. Input: Netlist + GBA timing report, extract pin/node features & arc/edge features
-2. Graph Construction: Build pin-level directed timing graph (edge = timing arc)
-3. ResAtt-Edge Layers: Edge-aware attention + residual connection stack
-4. Multi-level feature concatenation
-5. Dual MLP heads predict per-arc slew & delay, sum arcs to full path delay
+## Framework Overview
+
+PBA-rGAT-Edge follows a three-stage workflow (Section 4.1, Fig. 5 in the paper):
+
+1. **Feature and graph construction.** From GBA timing-path reports, extract pin-level electrical features and arc-level cell/net attributes, then construct a pin-based timing graph whose directed edges correspond to timing arcs. This representation enables fine-grained arc-level modeling beyond conventional gate-centric GNNs.
+2. **Residual edge-aware attention layers.** A stack of ResAtt-Edge layers performs edge-aware message passing, where node features and arc attributes jointly determine attention coefficients. Each layer applies residual updates to stabilize optimization and expand the effective receptive field. All intermediate node embeddings are retained for multi-scale fusion.
+3. **Arc-level prediction head.** Multi-level node embeddings are concatenated and fed into two lightweight MLP heads (Section 4.4) to predict arc slew and delay, providing PBA-quality estimates without invoking full PBA.
 
 ## 🔧 Environment Requirements
 ### Hardware
@@ -50,7 +47,9 @@ pip install numpy pyyaml matplotlib tqdm
 
 ## 📂 Data Generation
 
-The codebase integrates a **physically compliant synthetic timing graph generator** (`src/data.py`) that follows EDA static timing physical laws: dual-pass Elmore delay calculation, GBA pessimism inflation, STA worst-path timing propagation rules. Feature dimensions and definitions fully aligned with Table 1 of the paper.
+In the original paper (Section 5.1), datasets are constructed from **worst-case setup timing paths** reported by a commercial STA tool on 8 industrial designs. The training set comprises 5 designs (Design-1 through Design-5), ranging from 163,226 to 19,064,180 pins and 150,874 to 18,377,535 nets. The test set comprises 3 unseen designs (Design-6, Design-7, Design-8), with 82,886 to 684,548 pins. Node features include *slew_type*, *max_rise/fall_transition_time*, and *direction_of_signal*; edge features include *GBA_delay*, *arc_type*, *max_total_resistance*, and *CCS_total_max_rise/fall_cap* (see Table 1 in the paper).
+
+The open-source codebase provides a **physically compliant synthetic timing graph generator** (`src/data.py`) that follows the same EDA static timing physical laws as the paper: dual-pass Elmore delay calculation, GBA pessimism inflation, and STA worst-path timing propagation rules. Feature dimensions and definitions are fully aligned with Table 1 of the paper.
 
 ### Important Data Availability Statement
 The industrial timing datasets used in the original paper experiments are proprietary design files exported from commercial EDA static timing tools, protected by internal copyright and non-disclosure agreements, which cannot be publicly distributed.
@@ -98,25 +97,40 @@ Inference runs automatically after training: the best model (saved to `runs/rgat
 
 ## 📊 Reproduce Paper Experiments
 
-The paper's main results (Table 2, Table 3) were obtained on proprietary industrial datasets. The open-source code provides a synthetic data generator (`src/data.py`) with matching feature definitions for workflow validation. See paper Sections 5.1–5.3 for detailed experimental setup.
+The paper's main results (Table 2, Table 3) were obtained on 8 proprietary industrial designs (Section 5.1) processed through a commercial STA tool. The open-source code provides a synthetic data generator (`src/data.py`) with matching feature definitions and graph structure for workflow validation.
 
-### Baseline Comparison
-The paper compares against MLP, GraphSAGE, GAT, EGNN, and DeepEdgeGAT. See paper Table 2 for full comparison.
+### Baseline Comparison (Section 5.1, Table 2)
+PBA-rGAT-Edge is compared against five baselines — MLP, GraphSAGE, GAT, EGNN, and DeepEdgeGAT — each independently re-implemented as described in Section 5.1. See paper Table 2 for full comparison across all metrics.
 
-### Ablation Studies
-The paper ablates (Section 5.2):
-1. **Edge feature aggregation**: removing edge features during aggregation leads to non-convergence (Fig. 7b)
-2. **Residual connections**: removing them causes significant performance degradation
-3. **Layer depth**: 5-layer configuration achieves best trade-off (Fig. 6c)
+### Ablation Studies (Section 5.2)
+The paper ablates three design choices:
+1. **Edge feature aggregation** (Fig. 7b): removing edge features during aggregation leads to non-convergence
+2. **Residual connections**: removing them causes significant performance degradation across all metrics
+3. **Layer depth** (Fig. 6c): 5-layer configuration achieves the best accuracy-efficiency trade-off
 
 ## 📈 Main Experimental Results
-1. **Accuracy**
-   - Average arc delay R²: 0.998; Path delay R²: 0.999, MAE ≤4.2ps
-2. **Convergence**
-   Only 9 training epochs to converge, far faster than GAT / DeepEdgeGAT
-3. **Speed**
-   29× ~ 48× inference speedup compared to commercial full PBA static timing analysis
-4. Scalability: Stable performance on designs with up to ~19M pins
+
+**Table 2 — Unified comparison with baselines on industrial testcases (Section 5.1, paper Table 2):**
+
+| Metric | MLP | GraphSAGE | GAT | EGNN | DeepEdgeGAT | **PBA-rGAT-Edge** |
+|---|---|---|---|---|---|---|
+| Avg Slew R² | 0.946 | 0.941 | 0.972 | 0.969 | 0.845 | **0.974** |
+| Avg Delay R² | 0.987 | 0.996 | 0.997 | 0.997 | 0.996 | **0.998** |
+| Path R² | 0.986 | 0.992 | 0.995 | 0.997 | 0.996 | **0.999** |
+| Path MAE (ps) | 15.464 | 17.027 | 9.720 | 6.855 | 8.973 | **3.705** |
+
+**Table 3 — Training epochs and runtime (paper Table 3):**
+
+| Metric | MLP | GraphSAGE | GAT | EGNN | DeepEdgeGAT | **PBA-rGAT-Edge** |
+|---|---|---|---|---|---|---|
+| Epochs to converge | 75 | 235 | 802 | 197 | 183 | **9** |
+| Total train time (s) | 558 | 2,333 | 11,124 | 3,292 | 45,116 | 1,669 |
+
+Key findings:
+1. **Accuracy** — Average arc delay R²: **0.998**; Path delay R²: **0.999**, average Path MAE: **3.705 ps** (max ≤4.2 ps across test cases)
+2. **Convergence** — Only **9 training epochs** to converge, far faster than GAT (802 epochs) / DeepEdgeGAT (183 epochs)
+3. **Speed** — **29× to 48× inference speedup** compared to commercial full PBA static timing analysis (Design-6: 29×, Design-7: 45×, Design-8: 48×)
+4. **Scalability** — Stable performance on designs with up to ~19M pins
 
 ## 📝 Citation
 If you find this work useful in your research or industrial flow, please cite our DAC 2026 paper:
@@ -141,6 +155,10 @@ nn.Linear(node_feat_dim + edge_feat_dim, node_feat_dim)
 ```
 
 The full encoder follows Eq. (4) faithfully: `Linear(D_n + D_e, D_n) → LayerNorm → LeakyReLU`.
+
+**Section 5.1 (Speedup range)**: The inference speedup over commercial STA PBA is **29× to 48×** per-testcase (Design-6: 29×, Design-7: 45×, Design-8: 48×), corrected from any condensed range notation in the original text.
+
+**Abstract (Open-source URL)**: The open-source URL listed in the paper's abstract is `github.com/PBA-rGAT-Edge`; the correct repository is `https://github.com/liufangjian/PBA-rGAT-Edge`.
 
 ## ❓ FAQ
 
